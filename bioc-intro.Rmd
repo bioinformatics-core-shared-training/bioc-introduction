@@ -131,14 +131,14 @@ Complex data structures are used in Bioconductor to represent high-throughput da
 ## No need to run this - for reference only!
 ##
 
-biocLite("breastCancerNKI")
+biocLite("breastCancerVDX")
 ```
 
 To make the dataset accessible in R, we first need to load the package. If we navigate to the documentation for `breastCancerVDX` in RStudio, we find that it provides an object called `vdx` which we load into R's memory using the `data` function.
 
 ```{r message=FALSE}
-library(breastCancerNKI)
-data(nki)
+library(breastCancerVDX)
+data(vdx)
 ```
 
 The object `vdx` is a representation of breast cancer dataset that has been converted for use with standard Bioconductor tools. The package authors don't envisage that we will want to view the entire dataset at once, so have provided a number of ways to interact with the data
@@ -147,7 +147,7 @@ The object `vdx` is a representation of breast cancer dataset that has been conv
     + how many genes in the dataset, how many samples etc
     
 ```{r}
-nki
+vdx
 ```
 
 
@@ -160,7 +160,7 @@ The expression values can be obtained by the `exprs` function:-
     + it is a good idea to check the dimensions using `dim`, `ncol`, `nrow` etc
     
 ```{r}
-eValues <- exprs(nki)
+eValues <- exprs(vdx)
 class(eValues)
 dim(eValues)
 ncol(eValues)
@@ -227,7 +227,7 @@ boxplot(eValues,outline=FALSE)
 The *metadata*, or phenotypic data, for the samples is retrieved using the `pData` function.
 
 ```{r}
-metadata <- pData(nki)
+metadata <- pData(vdx)
 metadata
 ```
 
@@ -281,7 +281,7 @@ So far we have been able to print out a subset of our data by specifying a set o
 
 ```{r eval=FALSE}
 metadata$grade == 3
-metadata$age > 70
+metadata$age > 50
 
 ```
 
@@ -370,7 +370,7 @@ We could be lucky, and the first row in the expression matrix could be our favou
     + later in the course we will look at using online services and databases for annotation and converting between identifiers
 
 ```{r}
-features <- fData(nki)
+features <- fData(vdx)
 class(features)
 features[1:10,]
 
@@ -379,7 +379,7 @@ features[1:10,]
 As we know, gene symbols (more-common gene names) can be accessed using the `$` syntax; returning a vector
 
 ```{r eval=FALSE}
-features$NCBI.gene.symbol
+features$Gene.symbol
 ```
 
 We could inspect the data frame manually (e.g. using `View(features)`) and identfy the row number corresponding to our gene of interest. However, as aspiring R programmers, there is a better way
@@ -390,10 +390,10 @@ We could inspect the data frame manually (e.g. using `View(features)`) and ident
 - each of the above will give an *vector* that can be used to subset the expression values
 
 ```{r}
-which(features$NCBI.gene.symbol == "BRCA1")
-match("BRCA1",features$NCBI.gene.symbol)
-grep("BRCA1",features$NCBI.gene.symbol)
-grep("BRCA",features$NCBI.gene.symbol)
+which(features$Gene.symbol == "BRCA1")
+match("BRCA1",features$Gene.symbol)
+grep("BRCA1",features$Gene.symbol)
+grep("BRCA",features$Gene.symbol)
 
 
 ```
@@ -438,9 +438,10 @@ Later in the course we will see how to execute a *differential expression* analy
 ```{r}
 library(genefilter)
 tstats <- rowttests(eValues, as.factor(metadata$er))
+which(is.na(eValues[1,]))
 head(tstats)
 hist(tstats$statistic)
-?rowttests
+
 ```
 
 The rows are ordered in the same way as the input matrix
@@ -487,7 +488,6 @@ all(rownames(tstats) == rownames(features))
 
 tstats.annotated <- cbind(tstats, features[,c("Gene.symbol","EntrezGene.ID","Chromosome.location")])
 tstats.annotated                        
-
 ```
 
 Now when we order by p-value, the extra columns that we just added allow us to interpret the results more easily
@@ -588,24 +588,40 @@ plot(clust)
 We can see which samples are grouped together by cutting the tree at a particular height, or to give a pre-determined number of groups
 
 ```{r echo=FALSE}
-plot(hclust(distMat))
-abline(h=80,col="red")
+hca <- hclust(distMat)
+plot(hca)
+rect.hclust(hca,h=250)
 ```
 
 
 
 ```{r}
-cutree(hclust(distMat), h=80)
+cutree(hclust(distMat), h=250)
 cutree(hclust(distMat), k=2)
 ```
 
-We can then compare these new labels to what is already known about the samples
+******
+******
+******
 
-```{r}
-mylabels <- cutree(hclust(distMat), h=80)
-table(mylabels, metadata$er)
+
+## Exercise
+
+- How many groups are formed if we cut the tree at a height of 250?
+- How many samples are in each group
+- Create a data frame containing the meta data for the samples belonging to the largest group
+
+```{r echo=FALSE}
 
 ```
+
+
+
+******
+******
+******
+
+
 
 
 There are two very important points to consider when performing clustering
@@ -624,37 +640,47 @@ Perhaps a more common way of displaying a heatmap is as part of a heatmap which 
 But first we need to restrict the genes
 
 - we can't display all 30,000 genes in one picture
-- to do this we pick the genes with the highest variance using a handy function
+- to do this we pick the genes with the the lowest p-value from our previous analysis
 
 ```{r}
-library(genefilter)
-geneVar <- rowSds(eValues)
-topVar <- order(geneVar,decreasing=TRUE)[1:100]
+mostDE <- order(tstats$p.value,decreasing = FALSE)[1:30]
 ```
 
-Let's just go ahead and run the function
+Let's just go ahead and run the function `heatmap`
 
 ```{r}
-heatmap(eValues[topVar,])
+heatmap(eValues[mostDE,])
 ```
 
-Cool! There seems to be some kind of structure to the data. But the plot is a little ugly. Fortunately there are plenty of options in the function that we can use to tweak the plot (`?heatmap`)
+Cool! There seems to be some kind of structure to the data. However, the plot is a little ugly. Fortunately there are plenty of options in the function that we can use to tweak the plot (`?heatmap`)
 
 - we can specify a block of colour to go underneath each sample to indicate if belong to the "*ER Positive*" or "*ER Negative*" group
 - this has to be a vector with the same length as the number of samples
+- we can build such a vector in two stages
+    + first repeating one colour (e.g. `blue`) for each samples
+    + then replacing entries corresponding to a particular sample type with a different colour
 
 ```{r}
 sampColours <- rep("blue",ncol(eValues))
 sampColours[metadata$er == 0 ] <- "yellow"
-heatmap(eValues[topVar,],
+heatmap(eValues[mostDE,],
         ColSideColors = sampColours)
 ```
 
+The colour scheme for the cells in the heatmap can also be changed. The `RColorBrewer` package has a number of pre-defined palettes, several of which are suitable for those with colour-blindness (the commonly used red-green scale for heatmaps is clearly a bad choice).
+
+```{r}
+display.brewer.all(colorblindFriendly = TRUE)
+```
+
+A good choice for a heatmap is a palette which diverges from one extreme to another. If we use the `RdBu` palette, samples with lower gene expression will be shown in *red*
+
+- the function `brewer.pal` is used to create the palette with a certain number of colours
 
 ```{r}
 library(RColorBrewer)
 rbPal <- brewer.pal(10, "RdBu")
-heatmap(eValues[topVar,],
+heatmap(eValues[mostDE,],
         ColSideColors = sampColours,
         col=rbPal)
 ```
@@ -667,21 +693,60 @@ heatmap(eValues[topVar,],
 
 ## Exercise
 
-- Modify the row names of the heatmap so the gene names are displayed rather than probe names
-
+- Modify the labels on the side of the heatmap so the gene names are displayed rather than probe names
+- You will need to check the help page of `heatmap` to see which argument needs to be specified to change the labels
+- (Optional) Can you remove the samples names on the bottom of the heatmap?
 
 ```{r echo=FALSE}
 features[topVar,]
-heatmap(eValues[topVar,],
+heatmap(eValues[mostDE,],
         ColSideColors = sampColours,
         col=rbPal,
-        labRow = features$NCBI.gene.symbol[topVar])
+        labRow = features$Gene.symbol[mostDE],
+        labCol="")
 ```
 
 
 ******
 ******
 ******
+
+Of course we should not be surprised that our heatmap showed good separation; we used genes that we previously found to be statistically different between samples.
+
+- the heatmap function requires a numeric matrix as its argument
+    + it doesn't really care how this matrix was generated
+- so it's your choice about what genes / samples are present in the matrix
+- 
+
+
+```{r}
+my.genes <- which(features$Chromosome.location=="8p12")
+my.genes
+heatmap(eValues[my.genes,],
+        ColSideColors = sampColours,
+        col=rbPal,
+        labRow = features$Gene.symbol[my.genes],
+        labCol="")
+
+```
+
+Or give a pre-defined list of genes
+
+```{r}
+
+my.genes <- features$Gene.symbol %in% c("CLIC6","TFF3","PDZK1","SCUBE2","CYP2B6","HOXB13","NAT1","LY6D","SLC7A2")
+heatmap(eValues[my.genes,],
+        ColSideColors = sampColours,
+        col=rbPal,
+        labRow = features$Gene.symbol[my.genes],
+        labCol="")
+
+
+```
+
+
+
+
 
 
 ### (Optional) Downloading data from GEO
